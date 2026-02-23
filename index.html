@@ -120,7 +120,7 @@
                        @change="e => updateSceneTime(scene, 'start', e.target.value)"
                        class="w-24 border border-gray-300 rounded px-1 py-1 text-sm text-center font-mono focus:outline-none focus:border-blue-500">
                 <button @click="adjustTime(scene, 'start', 1)" class="bg-white border border-gray-300 px-2 py-1 rounded text-xs font-mono hover:bg-gray-100">+1</button>
-                <button @click="setStartToCurrent(scene)" class="border border-yellow-600 text-yellow-800 text-xs px-2 py-1 rounded bg-yellow-50 hover:bg-yellow-100 font-bold">いま開始</button>
+                <button @click="setStartToCurrent(scene)" class="border border-yellow-600 text-yellow-800 text-xs px-2 py-1 rounded bg-yellow-50 hover:bg-yellow-100 font-bold">いまを開始に</button>
               </div>
 
               <div class="flex items-center gap-1">
@@ -132,7 +132,7 @@
                        :class="{'bg-red-50 border-red-500 text-red-700': scene.end <= scene.start, 'border-gray-300': scene.end > scene.start}"
                        class="w-24 border rounded px-1 py-1 text-sm text-center font-mono focus:outline-none focus:border-blue-500">
                 <button @click="adjustTime(scene, 'end', 1)" class="bg-white border border-gray-300 px-2 py-1 rounded text-xs font-mono hover:bg-gray-100">+1</button>
-                <button @click="setEndToCurrent(scene)" class="bg-yellow-100 text-yellow-900 border border-yellow-300 text-xs px-2 py-1 rounded hover:bg-yellow-200 font-bold">いま終了</button>
+                <button @click="setEndToCurrent(scene)" class="bg-yellow-100 text-yellow-900 border border-yellow-300 text-xs px-2 py-1 rounded hover:bg-yellow-200 font-bold">いまを終了に</button>
               </div>
             </div>
 
