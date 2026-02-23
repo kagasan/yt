@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube シーン構成ツール</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    [v-cloak] { display: none; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 font-sans text-gray-800">
+  <div id="app" v-cloak class="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6">
+    
+    <div class="w-full lg:w-5/12 flex flex-col gap-4">
+      <div class="bg-white p-4 rounded shadow">
+        <div class="mb-4">
+          <h2 class="text-xl font-bold">1. 動画の読み込み</h2>
+        </div>
+        <div class="flex gap-2">
+          <input v-model="videoUrl" type="text" placeholder="YouTube URLを入力" class="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+          <button @click="loadVideo" class="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 transition font-bold">ロード</button>
+        </div>
+      </div>
+
+      <div v-if="isLoaded" class="bg-white p-4 rounded shadow">
+        <div id="player-container" :class="recordingMode ? 'fixed inset-0 z-40 bg-black' : 'aspect-video bg-black rounded overflow-hidden mb-4'">
+          <div id="player"></div>
+        </div>
+        
+        <div class="flex flex-wrap justify-between items-center mb-4 bg-gray-50 p-2 rounded border gap-y-2">
+          <div class="flex items-center gap-3">
+            <div class="text-lg font-mono font-bold text-gray-700">
+              現在時刻: <span class="text-blue-600">{{ currentTimeDisplay }}</span>
+            </div>
+            <div class="flex gap-1">
+              <button @click="playMainVideo" class="bg-green-100 text-green-700 border border-green-200 px-3 py-1 rounded text-sm hover:bg-green-200 font-bold transition-colors">▶ 再生</button>
+              <button @click="pauseMainVideo" class="bg-gray-200 text-gray-700 border border-gray-300 px-3 py-1 rounded text-sm hover:bg-gray-300 font-bold transition-colors">⏸ 一時停止</button>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <input v-model="seekInput" type="text" placeholder="hh:mm:ss" class="w-24 border p-1 rounded text-center font-mono text-sm">
+            <button @click="seekToTime" class="bg-blue-100 text-blue-700 px-3 py-1 rounded text-sm hover:bg-blue-200 font-bold">シーク</button>
+          </div>
+        </div>
+
+        <h3 class="text-sm font-bold text-gray-600 mb-2">クイックシーク</h3>
+        <div class="flex flex-wrap justify-center gap-1">
+          <button @click="seekBy(-600)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">-10m</button>
+          <button @click="seekBy(-300)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">-5m</button>
+          <button @click="seekBy(-60)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">-1m</button>
+          <button @click="seekBy(-30)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">-30s</button>
+          <button @click="seekBy(-10)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">-10s</button>
+          <button @click="seekBy(-1)" class="flex-1 min-w-[40px] bg-red-100 text-red-800 text-xs py-2 rounded hover:bg-red-200 font-bold">-1s</button>
+          <button @click="seekBy(1)" class="flex-1 min-w-[40px] bg-blue-100 text-blue-800 text-xs py-2 rounded hover:bg-blue-200 font-bold">+1s</button>
+          <button @click="seekBy(10)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">+10s</button>
+          <button @click="seekBy(30)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">+30s</button>
+          <button @click="seekBy(60)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">+1m</button>
+          <button @click="seekBy(300)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">+5m</button>
+          <button @click="seekBy(600)" class="flex-1 min-w-[40px] bg-gray-200 text-xs py-2 rounded hover:bg-gray-300 font-bold">+10m</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="isLoaded" class="w-full lg:w-7/12 flex flex-col gap-4">
+      <div class="bg-white p-4 rounded shadow flex flex-col max-h-[85vh]">
+        
+        <div class="flex flex-wrap justify-between items-center mb-4 gap-y-2">
+          <div class="flex items-center gap-3">
+            <h2 class="text-xl font-bold">2. シーンの構成</h2>
+            
+            <div class="bg-gray-100 border border-gray-300 rounded px-3 py-1 text-sm font-mono shadow-inner text-gray-700 flex items-center gap-1">
+              <span :class="{'text-blue-600 font-bold': previewing}">{{ formattedPreviewProgress }}</span>
+              <span class="text-gray-400">/</span>
+              <span>{{ formattedTotalDuration }}</span>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button @click="addScene" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition font-bold">+ 追加</button>
+            <button @click="startRecordingMode" class="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700 transition font-bold shadow">🎥 収録モード</button>
+            <button @click="togglePreview" :class="previewing ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-800 hover:bg-gray-900'" class="text-white px-3 py-1 rounded transition font-bold">
+              {{ previewing ? '■ 停止' : '▶ 全体連続再生' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
+          <div v-if="scenes.length === 0" class="text-gray-500 text-center py-8">シーンがありません。追加してください。</div>
+          <div v-for="(scene, index) in scenes" :key="scene.id" 
+               class="p-3 rounded-lg relative transition-all duration-200 border-2"
+               :class="isCurrentScene(scene, index) ? 'bg-blue-50 border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.4)]' : 'bg-white border-gray-200 shadow-sm'">
+            
+            <div class="flex flex-wrap justify-between items-center mb-3 gap-y-2">
+              <div class="flex items-center gap-3">
+                <span class="font-bold text-gray-800 text-lg">シーン {{ index + 1 }}</span>
+                <span class="text-xs font-mono bg-gray-200 text-gray-700 px-2 py-1 rounded border border-gray-300">
+                  長さ: {{ sceneDuration(scene) }}
+                </span>
+              </div>
+              <div class="flex flex-wrap gap-1">
+                <button @click="playScene(scene)" class="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 text-xs rounded hover:bg-blue-100 font-bold">再生</button>
+                <button @click="startPreviewFrom(index)" class="bg-orange-50 text-orange-700 border border-orange-200 px-3 py-1 text-xs rounded hover:bg-orange-100 font-bold">ここから連続再生</button>
+                <button @click="moveScene(index, -1)" :disabled="index === 0" class="bg-gray-100 border border-gray-200 px-2 py-1 text-xs rounded hover:bg-gray-200 disabled:opacity-50">↑</button>
+                <button @click="moveScene(index, 1)" :disabled="index === scenes.length - 1" class="bg-gray-100 border border-gray-200 px-2 py-1 text-xs rounded hover:bg-gray-200 disabled:opacity-50">↓</button>
+                <button @click="removeScene(index)" class="bg-red-50 text-red-700 border border-red-200 px-3 py-1 text-xs rounded hover:bg-red-100 font-bold ml-1">削除</button>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-2">
+              <div class="flex items-center gap-1">
+                <span class="text-xs font-bold text-gray-600 w-8">開始</span>
+                <button @click="adjustTime(scene, 'start', -1)" class="bg-white border border-gray-300 px-2 py-1 rounded text-xs font-mono hover:bg-gray-100">-1</button>
+                <input type="text" 
+                       :value="formatTimeWithDecimal(scene.start)" 
+                       @change="e => updateSceneTime(scene, 'start', e.target.value)"
+                       class="w-24 border border-gray-300 rounded px-1 py-1 text-sm text-center font-mono focus:outline-none focus:border-blue-500">
+                <button @click="adjustTime(scene, 'start', 1)" class="bg-white border border-gray-300 px-2 py-1 rounded text-xs font-mono hover:bg-gray-100">+1</button>
+                <button @click="setStartToCurrent(scene)" class="border border-yellow-600 text-yellow-800 text-xs px-2 py-1 rounded bg-yellow-50 hover:bg-yellow-100 font-bold">ここで開始</button>
+              </div>
+
+              <div class="flex items-center gap-1">
+                <span class="text-xs font-bold text-gray-600 w-8">終了</span>
+                <button @click="adjustTime(scene, 'end', -1)" class="bg-white border border-gray-300 px-2 py-1 rounded text-xs font-mono hover:bg-gray-100">-1</button>
+                <input type="text" 
+                       :value="formatTimeWithDecimal(scene.end)" 
+                       @change="e => updateSceneTime(scene, 'end', e.target.value)"
+                       :class="{'bg-red-50 border-red-500 text-red-700': scene.end <= scene.start, 'border-gray-300': scene.end > scene.start}"
+                       class="w-24 border rounded px-1 py-1 text-sm text-center font-mono focus:outline-none focus:border-blue-500">
+                <button @click="adjustTime(scene, 'end', 1)" class="bg-white border border-gray-300 px-2 py-1 rounded text-xs font-mono hover:bg-gray-100">+1</button>
+                <button @click="setEndToCurrent(scene)" class="bg-yellow-100 text-yellow-900 border border-yellow-300 text-xs px-2 py-1 rounded hover:bg-yellow-200 font-bold">ここで終了</button>
+              </div>
+            </div>
+
+            <div v-if="scene.end <= scene.start" class="text-red-500 text-xs font-bold mb-2">
+              ⚠️ 終了時刻は開始時刻より後に設定してください。
+            </div>
+            
+            <textarea v-model="scene.memo" rows="2" placeholder="シーンのメモ" class="w-full border border-gray-300 rounded p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="recordingMode && (recordingState === 'waiting' || recordingState === 'finished')" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div v-if="recordingState === 'waiting'" class="bg-gray-900 p-8 rounded-2xl text-center border border-gray-700 shadow-2xl max-w-md w-full">
+        <h2 class="text-white text-2xl font-bold mb-4">🎥 収録待機中</h2>
+        <p class="text-gray-300 mb-6 text-sm text-left leading-relaxed">
+          1. OSの機能で<strong>画面収録を開始</strong>してください。<br>
+          <span class="text-gray-400 text-xs block ml-4 mb-3 border-l-2 border-gray-600 pl-2">
+            Windows: <kbd class="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700 shadow-sm font-mono">Win</kbd> + <kbd class="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700 shadow-sm font-mono">Alt</kbd> + <kbd class="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700 shadow-sm font-mono">R</kbd><br>
+            Mac: <kbd class="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700 shadow-sm font-mono">Cmd</kbd> + <kbd class="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700 shadow-sm font-mono">Shift</kbd> + <kbd class="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700 shadow-sm font-mono">5</kbd>
+          </span>
+          2. 準備ができたら下のボタンを押してください。<br>
+          <span class="text-gray-500 text-xs mt-4 block bg-gray-800/50 p-3 rounded-lg">
+            ※ 再生開始と同時に自動で<strong>フルスクリーン</strong>になります。<br>
+            ※ UI表示被りを防ぐため、最初のシーン開始(マージン込)の<strong>さらに10秒前</strong>で待機しています。<br>
+            ※ 再生中はマウスを動かさないようご注意ください。
+          </span>
+        </p>
+        <button @click="beginRecordingPlay" class="w-full bg-red-600 text-white px-6 py-4 rounded-xl text-xl font-bold hover:bg-red-700 transition shadow-[0_0_20px_rgba(220,38,38,0.4)] mb-4">
+          ▶ 再生を開始する
+        </button>
+        <button @click="exitRecordingMode" class="text-gray-400 hover:text-white underline text-sm">
+          キャンセルして戻る
+        </button>
+      </div>
+      
+      <div v-if="recordingState === 'finished'" class="bg-gray-900 p-8 rounded-2xl text-center border border-gray-700 shadow-2xl max-w-md w-full">
+        <h2 class="text-white text-2xl font-bold mb-4">✅ 再生完了</h2>
+        <p class="text-gray-300 mb-6 text-sm">
+          <strong>画面収録を停止</strong>してください。<br>
+          <span class="text-gray-500 text-xs mt-2 block">（終了の余裕として10秒長く再生しました）</span>
+        </p>
+        <button @click="exitRecordingMode" class="w-full bg-blue-600 text-white px-6 py-4 rounded-xl text-xl font-bold hover:bg-blue-700 transition mb-4">
+          元の画面に戻る（フルスクリーン解除）
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
+
+    let ytPlayer = null;
+    let previewInterval = null;
+    let timeUpdateInterval = null;
+
+    window.onYouTubeIframeAPIReady = () => {
+      window.dispatchEvent(new Event('yt-ready'));
+    };
+
+    createApp({
+      setup() {
+        const SAMPLE_URL = 'https://youtu.be/NPZvht5atTo';
+        const videoUrl = ref(SAMPLE_URL);
+        const videoId = ref('');
+        const previewing = ref(false);
+        const currentPreviewIndex = ref(-1);
+        
+        const isLoaded = ref(false); 
+        const isApiReady = ref(false); 
+        
+        const recordingMode = ref(false);
+        const recordingState = ref('idle'); 
+        const currentRecordIndex = ref(-1);
+        let recordInterval = null;
+        
+        const scenes = ref([
+          { id: Date.now(), start: 16, end: 37, memo: '(これはサンプルです. 書き換えてください)\nテーマはこれ\n「なぜ王様は世界を救えというわりに選別がしょぼいのか」\nみんなも経験あるでしょ？\n「魔王を倒せるのはお前しかいない」\nとか持ち上げといて\n渡されるのが銅の剣と50Gだった時のあの絶望感' },
+          { id: Date.now() + 1, start: 41, end: 45, memo: 'ズバリ「国家が空っぽ説」' },
+          { id: Date.now() + 2, start: 45, end: 54, memo: '魔王が暴れてるんだよ\n物流は止まってるし 村は焼かれてる\n税収なんてあるわけないじゃん' },
+          { id: Date.now() + 3, start: 62, end: 75, memo: '貯金が10万Gしかない時に\n自称勇者の若者が来たらどうする？\nとりあえず一番安い武器買って\nあとは現地調達でって言っちゃうよね' }
+        ]);
+        
+        const currentTimeDisplay = ref('00:00:00.0');
+        const currentRawTime = ref(0); 
+        const seekInput = ref('00:00:00');
+
+        onMounted(() => {
+          const tag = document.createElement('script');
+          tag.src = "https://www.youtube.com/iframe_api";
+          const firstScriptTag = document.getElementsByTagName('script')[0];
+          firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+          window.addEventListener('yt-ready', () => {
+            isApiReady.value = true;
+          });
+
+          timeUpdateInterval = setInterval(() => {
+            if (ytPlayer && ytPlayer.getCurrentTime) {
+              const sec = ytPlayer.getCurrentTime();
+              currentTimeDisplay.value = formatTimeWithDecimal(sec);
+              currentRawTime.value = sec;
+            }
+          }, 100);
+        });
+
+        onUnmounted(() => {
+          stopPreview();
+          exitRecordingMode();
+          clearInterval(timeUpdateInterval);
+        });
+
+        const formatTimeWithDecimal = (seconds) => {
+          if (isNaN(seconds) || seconds < 0) return '00:00:00.0';
+          const h = Math.floor(seconds / 3600);
+          const m = Math.floor((seconds % 3600) / 60);
+          const s = Math.floor(seconds % 60);
+          const ms = Math.floor((seconds % 1) * 10);
+          return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}.${ms}`;
+        };
+
+        const parseTimeWithDecimal = (timeStr) => {
+          if (!timeStr) return 0;
+          if (!isNaN(timeStr)) return parseFloat(timeStr) || 0; 
+          
+          const parts = timeStr.split(':');
+          let seconds = 0;
+          if (parts.length === 3) {
+            seconds = parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2]);
+          } else if (parts.length === 2) {
+            seconds = parseInt(parts[0]) * 60 + parseFloat(parts[1]);
+          } else if (parts.length === 1) {
+            seconds = parseFloat(parts[0]);
+          }
+          return seconds || 0;
+        };
+
+        const updateSceneTime = (scene, type, value) => {
+          const parsed = parseTimeWithDecimal(value);
+          if (type === 'start') scene.start = Number(parsed.toFixed(1));
+          else scene.end = Number(parsed.toFixed(1));
+        };
+
+        const parseTime = (timeStr) => Math.floor(parseTimeWithDecimal(timeStr));
+
+        const sceneDuration = (scene) => {
+          const duration = scene.end - scene.start;
+          return formatTimeWithDecimal(duration > 0 ? duration : 0);
+        };
+
+        const totalDurationRaw = computed(() => {
+          return scenes.value.reduce((total, scene) => {
+            const dur = scene.end - scene.start;
+            return total + (dur > 0 ? dur : 0);
+          }, 0);
+        });
+        const formattedTotalDuration = computed(() => formatTimeWithDecimal(totalDurationRaw.value));
+
+        const currentPreviewProgressRaw = computed(() => {
+          if (!previewing.value || currentPreviewIndex.value < 0) return 0;
+
+          let progress = 0;
+          for (let i = 0; i < currentPreviewIndex.value; i++) {
+            const s = scenes.value[i];
+            const dur = s.end - s.start;
+            progress += (dur > 0 ? dur : 0);
+          }
+          
+          const currentScene = scenes.value[currentPreviewIndex.value];
+          if (currentScene) {
+            let currentSceneProgress = currentRawTime.value - currentScene.start;
+            if (currentSceneProgress < 0) currentSceneProgress = 0;
+            const maxSceneDur = currentScene.end - currentScene.start;
+            if (currentSceneProgress > maxSceneDur) currentSceneProgress = maxSceneDur;
+            
+            progress += currentSceneProgress;
+          }
+          
+          return progress;
+        });
+        const formattedPreviewProgress = computed(() => formatTimeWithDecimal(currentPreviewProgressRaw.value));
+
+        const isCurrentScene = (scene, index) => {
+          if (recordingMode.value) return currentRecordIndex.value === index;
+          if (previewing.value) return currentPreviewIndex.value === index;
+          return currentRawTime.value >= scene.start && currentRawTime.value < scene.end;
+        };
+
+        const extractVideoId = (url) => {
+          if (!url) return null;
+          const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+          const match = url.match(regExp);
+          return (match && match[2].length === 11) ? match[2] : null;
+        };
+
+        const initPlayer = () => {
+          ytPlayer = new YT.Player('player', {
+            height: '100%',
+            width: '100%',
+            videoId: videoId.value || '',
+            playerVars: { 'playsinline': 1 },
+          });
+        };
+
+        const loadVideo = () => {
+          if (!isApiReady.value) {
+            alert('YouTubeのシステムを読み込み中です。数秒待ってから再度お試しください。');
+            return;
+          }
+
+          const id = extractVideoId(videoUrl.value);
+          if (id) {
+            if (videoUrl.value !== SAMPLE_URL) {
+              scenes.value = [];
+            }
+
+            videoId.value = id;
+            isLoaded.value = true;
+
+            nextTick(() => {
+              if (!ytPlayer) {
+                initPlayer();
+              } else if (ytPlayer.loadVideoById) {
+                ytPlayer.loadVideoById(id);
+              }
+            });
+          } else {
+            alert('有効なYouTubeのURLを入力してください。');
+          }
+        };
+
+        const playMainVideo = () => {
+          if (ytPlayer && typeof ytPlayer.playVideo === 'function') ytPlayer.playVideo();
+        };
+
+        const pauseMainVideo = () => {
+          if (ytPlayer && typeof ytPlayer.pauseVideo === 'function') ytPlayer.pauseVideo();
+        };
+
+        const seekBy = (seconds) => {
+          if (!ytPlayer || !ytPlayer.getCurrentTime) return;
+          const currentTime = ytPlayer.getCurrentTime();
+          ytPlayer.seekTo(currentTime + seconds, true);
+        };
+
+        const seekToTime = () => {
+          if (!ytPlayer || !ytPlayer.seekTo) return;
+          const seconds = parseTime(seekInput.value);
+          ytPlayer.seekTo(seconds, true);
+        };
+
+        const getCurrentTime = () => {
+          return (ytPlayer && ytPlayer.getCurrentTime) ? Number(ytPlayer.getCurrentTime().toFixed(1)) : 0;
+        };
+
+        const addScene = () => {
+          const ct = getCurrentTime();
+          scenes.value.push({ id: Date.now(), start: ct, end: ct + 10, memo: '' });
+        };
+
+        const removeScene = (index) => { scenes.value.splice(index, 1); };
+
+        const moveScene = (index, direction) => {
+          const newIndex = index + direction;
+          if (newIndex >= 0 && newIndex < scenes.value.length) {
+            const temp = scenes.value[index];
+            scenes.value[index] = scenes.value[newIndex];
+            scenes.value[newIndex] = temp;
+          }
+        };
+
+        const setStartToCurrent = (scene) => { scene.start = getCurrentTime(); };
+        const setEndToCurrent = (scene) => { scene.end = getCurrentTime(); };
+
+        const adjustTime = (scene, type, amount) => {
+          if(type === 'start') {
+            scene.start = Number((scene.start + amount).toFixed(1));
+            if(scene.start < 0) scene.start = 0;
+            if(ytPlayer) ytPlayer.seekTo(scene.start, true);
+          } else {
+            scene.end = Number((scene.end + amount).toFixed(1));
+            if(scene.end < 0) scene.end = 0;
+            if(ytPlayer) ytPlayer.seekTo(scene.end, true);
+          }
+        };
+
+        const playScene = (scene) => {
+          if (!ytPlayer) return;
+          ytPlayer.seekTo(scene.start, true);
+          ytPlayer.playVideo();
+        };
+
+        // --- 収録モード ---
+        const startRecordingMode = () => {
+          if (scenes.value.length === 0 || !ytPlayer) {
+            alert('シーンを1つ以上追加してください。');
+            return;
+          }
+          stopPreview();
+          
+          recordingMode.value = true;
+          recordingState.value = 'waiting';
+          currentRecordIndex.value = 0;
+          
+          const firstScene = scenes.value[0];
+          const waitPos = Math.max(0, firstScene.start - 1 - 10);
+          
+          ytPlayer.seekTo(waitPos, true);
+          ytPlayer.pauseVideo();
+        };
+
+        const beginRecordingPlay = async () => {
+          // ブラウザ全体をフルスクリーン化
+          try {
+            if (document.documentElement.requestFullscreen) {
+              await document.documentElement.requestFullscreen();
+            }
+          } catch (e) {
+            console.warn('フルスクリーン化に失敗しました。', e);
+          }
+
+          recordingState.value = 'playing';
+          ytPlayer.playVideo();
+          
+          recordInterval = setInterval(() => {
+            if (!recordingMode.value || recordingState.value !== 'playing') return;
+            
+            const ct = getCurrentTime();
+            const currentScene = scenes.value[currentRecordIndex.value];
+            const isLastScene = currentRecordIndex.value === scenes.value.length - 1;
+            
+            const targetEnd = isLastScene 
+              ? currentScene.end + 1 + 10 
+              : currentScene.end + 1;
+              
+            if (ct >= targetEnd) {
+              if (isLastScene) {
+                recordingState.value = 'finished';
+                clearInterval(recordInterval);
+                ytPlayer.pauseVideo();
+              } else {
+                currentRecordIndex.value++;
+                const nextScene = scenes.value[currentRecordIndex.value];
+                const nextStart = Math.max(0, nextScene.start - 1);
+                ytPlayer.seekTo(nextStart, true);
+              }
+            }
+          }, 100);
+        };
+
+        const exitRecordingMode = async () => {
+          recordingMode.value = false;
+          recordingState.value = 'idle';
+          currentRecordIndex.value = -1;
+          clearInterval(recordInterval);
+          if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+
+          // フルスクリーン解除
+          try {
+            if (document.fullscreenElement) {
+              await document.exitFullscreen();
+            }
+          } catch (e) {
+            console.warn('フルスクリーン解除に失敗しました。', e);
+          }
+        };
+
+        const togglePreview = () => {
+          if (previewing.value) stopPreview();
+          else startPreview(0);
+        };
+
+        const startPreviewFrom = (index) => {
+          stopPreview();
+          startPreview(index);
+        };
+
+        const startPreview = (startIndex) => {
+          if (scenes.value.length === 0 || !ytPlayer || startIndex >= scenes.value.length) return;
+          previewing.value = true;
+          currentPreviewIndex.value = startIndex;
+          playScene(scenes.value[startIndex]);
+
+          previewInterval = setInterval(() => {
+            if (!previewing.value) return;
+            const ct = getCurrentTime();
+            const currentScene = scenes.value[currentPreviewIndex.value];
+            
+            if (ct >= currentScene.end) {
+              if (currentPreviewIndex.value + 1 < scenes.value.length) {
+                currentPreviewIndex.value++;
+                playScene(scenes.value[currentPreviewIndex.value]);
+              } else {
+                stopPreview();
+              }
+            }
+          }, 100);
+        };
+
+        const stopPreview = () => {
+          previewing.value = false;
+          currentPreviewIndex.value = -1;
+          clearInterval(previewInterval);
+          if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+        };
+
+        return {
+          videoUrl, scenes, previewing, currentPreviewIndex,
+          currentTimeDisplay, currentRawTime, seekInput,
+          isLoaded, 
+          recordingMode, recordingState,
+          loadVideo, playMainVideo, pauseMainVideo, seekBy, seekToTime,
+          addScene, removeScene, moveScene,
+          setStartToCurrent, setEndToCurrent, adjustTime, playScene, 
+          togglePreview, startPreviewFrom,
+          startRecordingMode, beginRecordingPlay, exitRecordingMode,
+          formatTimeWithDecimal, updateSceneTime,
+          sceneDuration, isCurrentScene,
+          formattedTotalDuration, formattedPreviewProgress
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
