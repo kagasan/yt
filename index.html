@@ -26,7 +26,18 @@
           <input v-model="videoUrl" type="text" placeholder="YouTube URLを入力" class="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
           <button @click="loadVideo" class="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 transition font-bold">ロード</button>
         </div>
-      </div>
+        
+        <div v-if="isLoaded && thumbnailUrl" class="mt-4 p-3 bg-gray-50 border rounded flex items-start gap-4">
+          <a :href="thumbnailUrl" target="_blank" rel="noopener noreferrer" class="shrink-0" title="画像を別タブで開く">
+            <img :src="thumbnailUrl" alt="サムネイル" class="w-32 object-cover rounded shadow hover:opacity-80 transition">
+          </a>
+          <div class="flex flex-col w-full gap-1">
+            <span class="text-xs font-bold text-gray-600">サムネイル画像URL:</span>
+            <input type="text" readonly :value="thumbnailUrl" class="w-full text-xs p-1.5 border border-gray-300 rounded bg-white text-gray-600 focus:outline-none focus:border-blue-500" @click="$event.target.select()">
+            <a :href="thumbnailUrl" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-600 hover:underline mt-1">▶ ブラウザで画像を開く</a>
+          </div>
+        </div>
+        </div>
 
       <div v-if="isLoaded" class="bg-white p-4 rounded shadow">
         <div id="player-container" :class="recordingMode ? 'fixed inset-0 z-40 bg-black' : 'aspect-video bg-black rounded overflow-hidden mb-4'">
@@ -200,6 +211,7 @@
         const SAMPLE_URL = 'https://youtu.be/NPZvht5atTo';
         const videoUrl = ref(SAMPLE_URL);
         const videoId = ref('');
+        const thumbnailUrl = ref(''); // 追加：サムネイルURLを格納する変数
         const previewing = ref(false);
         const currentPreviewIndex = ref(-1);
         
@@ -352,6 +364,9 @@
             }
 
             videoId.value = id;
+            // ▼追加：サムネイル画像のURLを生成
+            thumbnailUrl.value = `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+            
             isLoaded.value = true;
 
             nextTick(() => {
@@ -544,7 +559,7 @@
         return {
           videoUrl, scenes, previewing, currentPreviewIndex,
           currentTimeDisplay, currentRawTime, seekInput,
-          isLoaded, 
+          isLoaded, thumbnailUrl, // ← 追加
           recordingMode, recordingState,
           loadVideo, playMainVideo, pauseMainVideo, seekBy, seekToTime,
           addScene, removeScene, moveScene,
